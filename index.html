@@ -38,8 +38,32 @@
         .feed-desc { font-size: 13px; color: #666; margin-bottom: 4px;}
         .feed-date { font-size: 12px; color: #999; }
 
-        /* 무한 스크롤 감지용 센티널 (투명한 박스) */
         #scroll-sentinel { height: 20px; margin-top: 10px; }
+
+        /* --- 모달 팝업 CSS 추가 --- */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8); z-index: 9999;
+            justify-content: center; align-items: center; padding: 20px;
+            opacity: 0; transition: opacity 0.2s ease-in-out;
+        }
+        .modal-overlay.show { display: flex; opacity: 1; }
+        .modal-content {
+            background: #fff; width: 100%; max-width: 400px;
+            border-radius: 16px; overflow: hidden; position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal-close {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.5); color: #fff; border: none; 
+            width: 30px; height: 30px; border-radius: 50%;
+            font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        /* 사진 원본 비율을 가리지 않도록 object-fit: contain 사용 */
+        .modal-img { width: 100%; max-height: 40vh; object-fit: contain; background: #000; display: block; }
+        .modal-info { padding: 20px; }
+        .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+        .modal-desc { font-size: 14px; color: #666; line-height: 1.5; }
 
         @media (max-width: 768px) {
             .content-wrapper { flex-direction: column; }
@@ -65,94 +89,109 @@
         </div>
     </div>
 
+    <div id="log-modal" class="modal-overlay" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <img id="modal-img" class="modal-img" src="" alt="상세 사진">
+            <div class="modal-info">
+                <div id="modal-title" class="modal-title"></div>
+                <div id="modal-desc" class="modal-desc"></div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // --- 1. 전역 상태 관리 ---
-        let allLogs = [];         // API에서 불러온 전체 데이터
-        let filteredLogs = [];    // 현재 필터링된 데이터
-        let currentRenderIndex = 0; // 피드에 렌더링된 아이템 개수
-        const ITEMS_PER_PAGE = 10;  // 한 번 스크롤 시 불러올 개수
+        let allLogs = [];         
+        let filteredLogs = [];    
+        let currentRenderIndex = 0; 
+        const ITEMS_PER_PAGE = 10;  
 
-        // --- 2. 리플렛 지도 초기화 ---
-        const map = L.map('map').setView([36.5, 127.8], 8); // 대한민국 중심부
+        const map = L.map('map').setView([36.5, 127.8], 8); 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(map);
         let markerGroup = L.featureGroup().addTo(map);
 
-        // --- 3. API 데이터 페치 ---        
         const API_URL = 'https://mrdindoin.ddns.net/stsf/api/logs';
 
         async function fetchLogs() {
             try {
-                // CORS나 실제 연동 전 테스트를 위한 하드코딩 데이터 방어 코드
                 const response = await fetch(API_URL);
                 if (!response.ok) throw new Error('Network response was not ok');
                 allLogs = await response.json();
-                
-                // 최신순 정렬 (date 기준 내림차순)
                 allLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
-                
                 applyFilter('전체');
             } catch (error) {
                 console.error('API Fetch Error:', error);
-                // 연동 실패 시 더미 데이터로 작동 확인 (지워도 무방합니다)
                 allLogs = [
-                    { id: "1", date: "2026-06-03 16:20", title: "배스 42cm", place: "충주호", tags: ["배스", "텍사스리그"], lat: 36.974, lng: 128.013, photo: "https://via.placeholder.com/80" },
-                    { id: "2", date: "2026-06-03 05:45", title: "월척 붕어", place: "탄금호", tags: ["붕어"], lat: 37.012, lng: 127.899, photo: "" },
-                    // ... 가상 데이터 생략 ...
+                    { id: "1", date: "2026-06-03 16:20", title: "배스 42cm", place: "충주호", tags: ["배스", "텍사스리그"], lat: 36.974, lng: 128.013, photo: "https://via.placeholder.com/300x200" },
+                    { id: "2", date: "2026-06-03 05:45", title: "월척 붕어", place: "탄금호", tags: ["붕어"], lat: 37.012, lng: 127.899, photo: "" }
                 ];
                 applyFilter('전체');
             }
         }
 
-        // --- 4. 데이터 필터링 및 지도 업데이트 ---
+        // --- 모달 제어 함수 추가 ---
+        window.openModal = function(logId) {
+            const log = allLogs.find(l => l.id === logId);
+            if(!log) return;
+            
+            const modalImg = document.getElementById('modal-img');
+            modalImg.src = log.photo || '';
+            modalImg.style.display = log.photo ? 'block' : 'none'; // 사진 없으면 영역 숨김
+            
+            document.getElementById('modal-title').innerText = log.title;
+            // 태그 배열 유무 체크 방어 코드 추가
+            const tags = (log.tags && log.tags.length > 0) ? `<br>🏷️ ${log.tags.join(', ')}` : '';
+            document.getElementById('modal-desc').innerHTML = `📍 ${log.place}<br>📅 ${log.date}${tags}`;
+            
+            document.getElementById('log-modal').classList.add('show');
+        };
+
+        window.closeModal = function() {
+            document.getElementById('log-modal').classList.remove('show');
+        };
+
         function applyFilter(species) {
-            // 태그 배열이나 타이틀에 해당 어종이 포함되어 있는지 확인
             filteredLogs = species === '전체' 
                 ? allLogs 
-                : allLogs.filter(log => log.tags.includes(species) || log.title.includes(species));
+                : allLogs.filter(log => (log.tags && log.tags.includes(species)) || (log.title && log.title.includes(species)));
 
-            // [지도 업데이트] - 필터링된 모든 마커를 한 번에 지도에 표시
             markerGroup.clearLayers();
             filteredLogs.forEach(log => {
                 if(log.lat && log.lng) {
-					const photoHtml = log.photo 
-						? `<img src="${log.photo}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="조과 사진">` 
-						: '';
+                    const photoHtml = log.photo 
+                        ? `<img src="${log.photo}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="조과 사진">` 
+                        : '';
 
-					// 팝업에 들어갈 HTML 구조 조립
-					const popupContent = `
-						<div style="min-width: 180px; text-align: center;">
-							${photoHtml}
-							<b style="display: block; font-size: 14px; margin-bottom: 4px;">${log.title}</b>
-							<span style="font-size: 12px; color: #666;">📍 ${log.place}</span>
-						</div>
-					`;
+                    // --- 팝업에 onclick 이벤트(openModal) 추가 ---
+                    const popupContent = `
+                        <div style="min-width: 180px; text-align: center; cursor: pointer;" onclick="openModal('${log.id}')">
+                            ${photoHtml}
+                            <b style="display: block; font-size: 14px; margin-bottom: 4px;">${log.title}</b>
+                            <span style="font-size: 12px; color: #666;">📍 ${log.place}</span>
+                        </div>
+                    `;
 
-					const marker = L.marker([log.lat, log.lng])
-						.bindPopup(popupContent, { 
-							minWidth: 180, // 팝업이 너무 좁게 뜨지 않도록 최소 너비 지정
-							maxWidth: 250 
-						})
-						.addTo(markerGroup);
-                    // 마커 객체를 데이터에 임시 저장 (피드 클릭 시 팝업 열기 위함)
+                    const marker = L.marker([log.lat, log.lng])
+                        .bindPopup(popupContent, { 
+                            minWidth: 180, maxWidth: 250 
+                        })
+                        .addTo(markerGroup);
                     log._marker = marker; 
                 }
             });
 
-            // 마커들에 맞춰 지도 줌/위치 자동 조정
             if (filteredLogs.length > 0) {
                 map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 14 });
             }
 
-            // [피드 초기화 및 첫 페이지 렌더링]
             document.getElementById('feed-list').innerHTML = '';
             currentRenderIndex = 0;
             renderNextBatch();
         }
 
-        // --- 5. 피드 무한 스크롤 렌더링 함수 ---
         function renderNextBatch() {
             const feedList = document.getElementById('feed-list');
             const end = Math.min(currentRenderIndex + ITEMS_PER_PAGE, filteredLogs.length);
@@ -162,29 +201,40 @@
                 const card = document.createElement('div');
                 card.className = 'feed-card';
                 
-                // 사진이 없을 경우 기본 이미지 혹은 숨김 처리
                 const imgTag = log.photo 
                     ? `<img src="${log.photo}" class="feed-img" alt="조과 사진">` 
                     : `<div class="feed-img" style="display:flex; align-items:center; justify-content:center; font-size:24px;">🐟</div>`;
 
+                const tags = (log.tags && log.tags.length > 0) ? `| 🏷️ ${log.tags.join(', ')}` : '';
                 card.innerHTML = `
                     ${imgTag}
                     <div class="feed-info">
                         <div class="feed-title">${log.title}</div>
-                        <div class="feed-desc">📍 ${log.place} ${log.tags.length > 0 ? '| 🏷️ ' + log.tags.join(', ') : ''}</div>
+                        <div class="feed-desc">📍 ${log.place} ${tags}</div>
                         <div class="feed-date">${log.date}</div>
                     </div>
                 `;
 
-                // [인터랙션] 피드 클릭 시 지도로 이동
                 card.addEventListener('click', () => {
                     if (log.lat && log.lng) {
-                        // 모바일 화면일 경우 피드에서 지도로 스크롤을 올려줌
                         if(window.innerWidth <= 768) {
                             document.querySelector('.content-wrapper').scrollTo({top: 0, behavior: 'smooth'});
                         }
-                        map.flyTo([log.lat, log.lng], 15, { duration: 0.5 });
-                        if(log._marker) log._marker.openPopup();
+                        
+                        const zoomLevel = 15;
+                        
+                        // --- 핀 중앙이 아닌 사진 팝업을 중앙에 오게 하는 오프셋 계산 ---
+                        const targetPoint = map.project([log.lat, log.lng], zoomLevel);
+                        // 150px 만큼 지도를 위로 올려서 핀이 아래로 내려가게 함 (팝업 높이 고려)
+                        targetPoint.y -= 150; 
+                        const offsetLatLng = map.unproject(targetPoint, zoomLevel);
+
+                        map.flyTo(offsetLatLng, zoomLevel, { duration: 0.5 });
+                        
+                        // 지도 이동이 완전히 끝난 후 팝업 열기 (화면 덜컹거림 방지)
+                        map.once('moveend', () => {
+                            if(log._marker) log._marker.openPopup();
+                        });
                     }
                 });
 
@@ -193,22 +243,19 @@
             currentRenderIndex = end;
         }
 
-        // --- 6. Intersection Observer (무한 스크롤 감지기) ---
         const sentinel = document.getElementById('scroll-sentinel');
         const observer = new IntersectionObserver((entries) => {
-            // 센티널(바닥)이 화면에 보이고, 아직 렌더링할 데이터가 남아있다면
             if (entries[0].isIntersecting && currentRenderIndex < filteredLogs.length) {
                 renderNextBatch();
             }
         }, {
             root: document.getElementById('feed-scroll-area'),
-            rootMargin: '100px', // 바닥에 닿기 100px 전에 미리 로드
+            rootMargin: '100px', 
             threshold: 0
         });
         
         observer.observe(sentinel);
 
-        // --- 7. 상단 필터 이벤트 리스너 ---
         document.getElementById('filter-container').addEventListener('click', (e) => {
             if (e.target.classList.contains('filter-btn')) {
                 document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -217,9 +264,7 @@
             }
         });
 
-        // 앱 시작
         fetchLogs();
-
     </script>
 </body>
 </html>
