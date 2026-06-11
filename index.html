@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>월별 추천 어종 지도</title>
+    <title>월별 추천 어종 지도 - 지도 중심</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -114,41 +114,25 @@
         .level-low .score-fill { background: #84cc16; }
         .level-none .score-fill { background: #cbd5e1; }
 
-        .content-wrapper { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-        #map { flex: 1.1; height: 100%; background: #e5e3df; z-index: 1; }
-        .feed-container { flex: 0.9; height: 100%; overflow-y: auto; padding: 18px; background: #f8f9fa; }
-
-        .feed-summary {
-            background: #fff;
+        .content-wrapper { position: relative; flex: 1; overflow: hidden; min-height: 0; }
+        #map { width: 100%; height: 100%; background: #e5e3df; z-index: 1; }
+        .map-status {
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            bottom: 14px;
+            z-index: 500;
+            background: rgba(255,255,255,0.94);
             border: 1px solid #e5e7eb;
-            border-radius: 14px;
-            padding: 14px;
-            margin-bottom: 14px;
-            font-size: 14px;
+            border-radius: 16px;
+            padding: 12px 14px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+            font-size: 13px;
             color: #374151;
             line-height: 1.45;
+            pointer-events: none;
         }
-        .feed-summary strong { color: #111827; }
-
-        .feed-card {
-            background: #fff;
-            padding: 16px;
-            margin-bottom: 12px;
-            border-radius: 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            cursor: pointer;
-            transition: transform 0.1s, box-shadow 0.1s;
-            display: flex;
-            gap: 15px;
-        }
-        .feed-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
-        .feed-img { width: 82px; height: 82px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
-        .feed-info { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-        .feed-title { font-size: 16px; font-weight: 900; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .feed-desc { font-size: 13px; color: #666; margin-bottom: 4px; line-height: 1.35; }
-        .feed-date { font-size: 12px; color: #999; }
-        .empty-state { padding: 40px 16px; text-align: center; color: #6b7280; font-weight: 700; }
-        #scroll-sentinel { height: 24px; margin-top: 10px; }
+        .map-status strong { color: #111827; }
 
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -171,11 +155,8 @@
             .month-number { font-size: 25px; }
             .recommend-section { padding: 10px 12px 12px; }
             .species-card { min-width: 126px; padding: 11px; }
-            .content-wrapper { flex-direction: column; }
-            #map { flex: 0 0 42%; min-height: 260px; }
-            .feed-container { flex: 1; padding: 12px; }
-            .feed-card { padding: 13px; gap: 12px; }
-            .feed-img { width: 70px; height: 70px; }
+            .content-wrapper { min-height: 0; }
+            .map-status { left: 10px; right: 10px; bottom: 10px; font-size: 12px; }
         }
     </style>
 </head>
@@ -192,7 +173,7 @@
         <section class="recommend-section">
             <div class="recommend-head">
                 <div class="recommend-title" id="recommend-title">🔥 잘 잡히는 순서</div>
-                <button class="reset-btn" id="show-all-btn">전체 로그</button>
+                <button class="reset-btn" id="show-all-btn">전체 보기</button>
             </div>
             <div class="species-strip" id="species-strip"></div>
         </section>
@@ -200,11 +181,7 @@
 
     <main class="content-wrapper">
         <div id="map"></div>
-        <div class="feed-container" id="feed-scroll-area">
-            <div class="feed-summary" id="feed-summary"></div>
-            <div id="feed-list"></div>
-            <div id="scroll-sentinel"></div>
-        </div>
+        <div class="map-status" id="map-status"></div>
     </main>
 
     <div id="log-modal" class="modal-overlay" onclick="closeModal()">
@@ -232,8 +209,6 @@
 
         let allLogs = [];
         let filteredLogs = [];
-        let currentRenderIndex = 0;
-        const ITEMS_PER_PAGE = 10;
         const today = new Date();
         let selectedMonth = today.getMonth() + 1;
         let selectedSpecies = null;
@@ -302,7 +277,7 @@
         function applyCurrentFilter() {
             filteredLogs = selectedSpecies ? allLogs.filter(log => logMatchesSpecies(log, selectedSpecies)) : allLogs;
             renderMarkers();
-            renderFeedReset();
+            updateMapStatus();
         }
 
         async function fetchLogs() {
@@ -352,71 +327,12 @@
             }
         }
 
-        function renderFeedReset() {
-            document.getElementById('feed-list').innerHTML = '';
-            currentRenderIndex = 0;
-            updateFeedSummary();
-            renderNextBatch();
-        }
-
-        function updateFeedSummary() {
-            const summary = document.getElementById('feed-summary');
-            const label = selectedSpecies ? `<strong>${selectedSpecies}</strong>` : `<strong>전체 어종</strong>`;
+        function updateMapStatus() {
+            const status = document.getElementById('map-status');
+            const label = selectedSpecies ? `<strong>${selectedSpecies}</strong>` : `<strong>${selectedMonth}월 추천 어종 전체</strong>`;
             const topFish = getMonthlySpecies()[0];
-            summary.innerHTML = `현재 선택: ${label}<br>${selectedMonth}월 최고 추천은 <strong>${topFish.name}</strong>입니다. 개인 로그 ${filteredLogs.length}건을 지도와 피드에 표시합니다.`;
-        }
-
-        function renderNextBatch() {
-            const feedList = document.getElementById('feed-list');
-            const end = Math.min(currentRenderIndex + ITEMS_PER_PAGE, filteredLogs.length);
-
-            if (filteredLogs.length === 0 && currentRenderIndex === 0) {
-                feedList.innerHTML = '<div class="empty-state">표시할 개인 조과 로그가 없습니다.</div>';
-                return;
-            }
-
-            for (let i = currentRenderIndex; i < end; i++) {
-                const log = filteredLogs[i];
-                const mainSpecies = (log.tags && log.tags[0]) || extractSpeciesFromTitle(log.title) || '';
-                const score = getSpeciesScore(mainSpecies);
-                const level = getScoreLevel(score);
-                const card = document.createElement('div');
-                card.className = 'feed-card';
-                const imgTag = log.photo
-                    ? `<img src="${log.photo}" class="feed-img" alt="조과 사진">`
-                    : `<div class="feed-img" style="display:flex;align-items:center;justify-content:center;font-size:26px;">🐟</div>`;
-                const tags = (log.tags && log.tags.length > 0) ? `| 🏷️ ${log.tags.join(', ')}` : '';
-                card.innerHTML = `
-                    ${imgTag}
-                    <div class="feed-info">
-                        <div class="feed-title">${escapeHtml(log.title || '')}</div>
-                        <div class="feed-desc">📍 ${escapeHtml(log.place || '')} ${tags}</div>
-                        <div class="feed-desc">${selectedMonth}월 제철도 ${score}% · ${level.label}</div>
-                        <div class="feed-date">${escapeHtml(log.date || '')}</div>
-                    </div>
-                `;
-                card.addEventListener('click', () => focusLogOnMap(log));
-                feedList.appendChild(card);
-            }
-            currentRenderIndex = end;
-        }
-
-        function focusLogOnMap(log) {
-            if (!(log.lat && log.lng)) {
-                openModal(log.id);
-                return;
-            }
-            if (window.innerWidth <= 768) {
-                document.querySelector('.content-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
-            }
-            const zoomLevel = 15;
-            const targetPoint = map.project([log.lat, log.lng], zoomLevel);
-            targetPoint.y -= 150;
-            const offsetLatLng = map.unproject(targetPoint, zoomLevel);
-            map.flyTo(offsetLatLng, zoomLevel, { duration: 0.5 });
-            map.once('moveend', () => {
-                if (log._marker) log._marker.openPopup();
-            });
+            const markerCount = markerGroup.getLayers().length;
+            status.innerHTML = `${label} 기준으로 개인 조과 핀 <strong>${markerCount}</strong>개를 표시합니다.<br>${selectedMonth}월 최고 추천은 <strong>${topFish.name}</strong>입니다. 어종 카드를 누르면 해당 어종 핀만 남습니다.`;
         }
 
         function extractSpeciesFromTitle(title = '') {
@@ -471,15 +387,6 @@
             applyCurrentFilter();
         });
 
-        const sentinel = document.getElementById('scroll-sentinel');
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && currentRenderIndex < filteredLogs.length) renderNextBatch();
-        }, {
-            root: document.getElementById('feed-scroll-area'),
-            rootMargin: '100px',
-            threshold: 0
-        });
-        observer.observe(sentinel);
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') closeModal();
