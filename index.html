@@ -1,46 +1,155 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>어종 중심 로그 지도</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>월별 추천 어종 지도</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; color: #333; height: 100vh; display: flex; flex-direction: column; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #202124;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
 
-        .header {
-            width: 100%; padding: 15px 20px; background: #fff; border-bottom: 1px solid #e0e0e0;
-            display: flex; gap: 10px; z-index: 1000; overflow-x: auto; white-space: nowrap;
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
         }
-        .filter-btn {
-            padding: 8px 16px; border: 1px solid #d1d5db; background: #fff; border-radius: 20px; cursor: pointer; font-weight: 600; transition: all 0.2s;
-        }
-        .filter-btn.active { background: #1a202c; color: #fff; border-color: #1a202c; }
 
-        .content-wrapper { display: flex; flex: 1; overflow: hidden; }
-        #map { flex: 1; height: 100%; background: #e5e3df; z-index: 1;}
-        .feed-container {
-            flex: 1; height: 100%; overflow-y: auto; padding: 20px; background: #f8f9fa;
+        .month-nav {
+            height: 62px;
+            display: grid;
+            grid-template-columns: 52px 1fr 52px;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
         }
-        
+
+        .nav-btn {
+            border: 1px solid #d8dee7;
+            background: #fff;
+            color: #111827;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            font-size: 22px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .nav-btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+        .nav-btn:active { transform: scale(0.96); }
+
+        .month-title { text-align: center; }
+        .month-number { font-size: 28px; font-weight: 900; line-height: 1; letter-spacing: -0.04em; }
+        .month-subtitle { margin-top: 4px; font-size: 12px; color: #6b7280; font-weight: 700; }
+
+        .recommend-section {
+            padding: 12px 16px 16px;
+            border-top: 1px solid #f0f2f5;
+        }
+        .recommend-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .recommend-title { font-size: 15px; font-weight: 900; }
+        .reset-btn {
+            border: 0;
+            background: #eef2ff;
+            color: #3730a3;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .species-strip {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: none;
+        }
+        .species-strip::-webkit-scrollbar { display: none; }
+
+        .species-card {
+            min-width: 136px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            border-radius: 16px;
+            padding: 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(15, 23, 42, 0.04);
+            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+            position: relative;
+            overflow: hidden;
+        }
+        .species-card:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08); }
+        .species-card.active { border-color: #111827; box-shadow: 0 0 0 2px #111827 inset; }
+        .species-card.hot { border-color: #ef4444; background: #fff5f5; }
+        .species-card.hot.active { box-shadow: 0 0 0 2px #ef4444 inset; }
+
+        .species-name { font-size: 17px; font-weight: 900; margin-bottom: 7px; }
+        .species-meta { font-size: 12px; color: #6b7280; font-weight: 700; margin-bottom: 10px; }
+        .score-bar { width: 100%; height: 8px; background: #edf0f4; border-radius: 999px; overflow: hidden; }
+        .score-fill { height: 100%; border-radius: 999px; background: #94a3b8; }
+        .level-hot .score-fill { background: #ef4444; }
+        .level-high .score-fill { background: #f97316; }
+        .level-mid .score-fill { background: #eab308; }
+        .level-low .score-fill { background: #84cc16; }
+        .level-none .score-fill { background: #cbd5e1; }
+
+        .content-wrapper { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+        #map { flex: 1.1; height: 100%; background: #e5e3df; z-index: 1; }
+        .feed-container { flex: 0.9; height: 100%; overflow-y: auto; padding: 18px; background: #f8f9fa; }
+
+        .feed-summary {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 14px;
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.45;
+        }
+        .feed-summary strong { color: #111827; }
+
         .feed-card {
-            background: #fff; padding: 16px; margin-bottom: 12px; border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.1s;
-            display: flex; gap: 15px;
+            background: #fff;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-radius: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+            display: flex;
+            gap: 15px;
         }
-        .feed-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .feed-img {
-            width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #eee; flex-shrink: 0;
-        }
-        .feed-info { flex: 1; display: flex; flex-direction: column; justify-content: center;}
-        .feed-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-        .feed-desc { font-size: 13px; color: #666; margin-bottom: 4px;}
+        .feed-card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
+        .feed-img { width: 82px; height: 82px; border-radius: 10px; object-fit: cover; background: #eee; flex-shrink: 0; }
+        .feed-info { flex: 1; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+        .feed-title { font-size: 16px; font-weight: 900; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .feed-desc { font-size: 13px; color: #666; margin-bottom: 4px; line-height: 1.35; }
         .feed-date { font-size: 12px; color: #999; }
+        .empty-state { padding: 40px 16px; text-align: center; color: #6b7280; font-weight: 700; }
+        #scroll-sentinel { height: 24px; margin-top: 10px; }
 
-        #scroll-sentinel { height: 20px; margin-top: 10px; }
-
-        /* --- 모달 팝업 CSS 추가 --- */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.8); z-index: 9999;
@@ -48,51 +157,60 @@
             opacity: 0; transition: opacity 0.2s ease-in-out;
         }
         .modal-overlay.show { display: flex; opacity: 1; }
-        .modal-content {
-            background: #fff; width: 100%; max-width: 400px;
-            border-radius: 16px; overflow: hidden; position: relative;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        }
-        .modal-close {
-            position: absolute; top: 10px; right: 10px;
-            background: rgba(0,0,0,0.5); color: #fff; border: none; 
-            width: 30px; height: 30px; border-radius: 50%;
-            font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        }
-        /* 사진 원본 비율을 가리지 않도록 object-fit: contain 사용 */
-        .modal-img { width: 100%; max-height: 40vh; object-fit: contain; background: #000; display: block; }
+        .modal-content { background: #fff; width: 100%; max-width: 420px; border-radius: 18px; overflow: hidden; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .modal-close { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.55); color: #fff; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .modal-img { width: 100%; max-height: 42vh; object-fit: contain; background: #000; display: block; }
         .modal-info { padding: 20px; }
-        .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 8px; }
-        .modal-desc { font-size: 14px; color: #666; line-height: 1.5; }
+        .modal-title { font-size: 19px; font-weight: 900; margin-bottom: 8px; }
+        .modal-desc { font-size: 14px; color: #666; line-height: 1.55; }
 
         @media (max-width: 768px) {
+            body { height: 100dvh; }
+            .month-nav { height: 58px; grid-template-columns: 46px 1fr 46px; padding: 8px 12px; }
+            .nav-btn { width: 38px; height: 38px; font-size: 20px; }
+            .month-number { font-size: 25px; }
+            .recommend-section { padding: 10px 12px 12px; }
+            .species-card { min-width: 126px; padding: 11px; }
             .content-wrapper { flex-direction: column; }
-            #map { flex: 0 0 50%; }
-            .feed-container { flex: 1; }
+            #map { flex: 0 0 42%; min-height: 260px; }
+            .feed-container { flex: 1; padding: 12px; }
+            .feed-card { padding: 13px; gap: 12px; }
+            .feed-img { width: 70px; height: 70px; }
         }
     </style>
 </head>
 <body>
+    <header class="topbar">
+        <div class="month-nav">
+            <button class="nav-btn" id="prev-month" aria-label="이전 달">‹</button>
+            <div class="month-title">
+                <div class="month-number"><span id="current-month-label">6</span>월</div>
+                <div class="month-subtitle" id="month-subtitle">이번 달 추천 어종</div>
+            </div>
+            <button class="nav-btn" id="next-month" aria-label="다음 달">›</button>
+        </div>
+        <section class="recommend-section">
+            <div class="recommend-head">
+                <div class="recommend-title" id="recommend-title">🔥 잘 잡히는 순서</div>
+                <button class="reset-btn" id="show-all-btn">전체 로그</button>
+            </div>
+            <div class="species-strip" id="species-strip"></div>
+        </section>
+    </header>
 
-    <div class="header" id="filter-container">
-        <button class="filter-btn active" data-species="전체">전체 어종</button>
-        <button class="filter-btn" data-species="배스">배스</button>
-        <button class="filter-btn" data-species="붕어">붕어</button>
-        <button class="filter-btn" data-species="쏘가리">쏘가리</button>
-    </div>
-
-    <div class="content-wrapper">
+    <main class="content-wrapper">
         <div id="map"></div>
         <div class="feed-container" id="feed-scroll-area">
+            <div class="feed-summary" id="feed-summary"></div>
             <div id="feed-list"></div>
             <div id="scroll-sentinel"></div>
         </div>
-    </div>
+    </main>
 
     <div id="log-modal" class="modal-overlay" onclick="closeModal()">
         <div class="modal-content" onclick="event.stopPropagation()">
             <button class="modal-close" onclick="closeModal()">✕</button>
-            <img id="modal-img" class="modal-img" src="" alt="상세 사진">
+            <img id="modal-img" class="modal-img" src="" alt="상세 사진" />
             <div class="modal-info">
                 <div id="modal-title" class="modal-title"></div>
                 <div id="modal-desc" class="modal-desc"></div>
@@ -102,12 +220,25 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let allLogs = [];         
-        let filteredLogs = [];    
-        let currentRenderIndex = 0; 
-        const ITEMS_PER_PAGE = 10;  
+        // 이 데이터만 바꾸면 월별 추천 순서와 강조가 바뀝니다.
+        const fishSeasonData = [
+            { name: '배스', season: { 1: 25, 2: 35, 3: 60, 4: 90, 5: 100, 6: 90, 7: 70, 8: 65, 9: 80, 10: 85, 11: 55, 12: 30 } },
+            { name: '붕어', season: { 1: 30, 2: 35, 3: 75, 4: 95, 5: 90, 6: 70, 7: 55, 8: 55, 9: 75, 10: 90, 11: 65, 12: 40 } },
+            { name: '쏘가리', season: { 1: 10, 2: 15, 3: 35, 4: 65, 5: 90, 6: 100, 7: 85, 8: 70, 9: 80, 10: 60, 11: 25, 12: 10 } },
+            { name: '가물치', season: { 1: 5, 2: 10, 3: 25, 4: 55, 5: 80, 6: 95, 7: 100, 8: 90, 9: 65, 10: 35, 11: 15, 12: 5 } },
+            { name: '잉어', season: { 1: 20, 2: 25, 3: 45, 4: 70, 5: 85, 6: 80, 7: 65, 8: 60, 9: 75, 10: 80, 11: 50, 12: 25 } },
+            { name: '메기', season: { 1: 5, 2: 10, 3: 20, 4: 45, 5: 70, 6: 90, 7: 100, 8: 95, 9: 75, 10: 45, 11: 20, 12: 5 } }
+        ];
 
-        const map = L.map('map').setView([36.5, 127.8], 8); 
+        let allLogs = [];
+        let filteredLogs = [];
+        let currentRenderIndex = 0;
+        const ITEMS_PER_PAGE = 10;
+        const today = new Date();
+        let selectedMonth = today.getMonth() + 1;
+        let selectedSpecies = null;
+
+        const map = L.map('map').setView([36.5, 127.8], 8);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(map);
@@ -115,37 +246,204 @@
 
         const API_URL = 'https://mrdindoin.ddns.net/stsf/api/logs';
 
+        function getScoreLevel(score) {
+            if (score >= 90) return { className: 'level-hot', label: '핫함' };
+            if (score >= 70) return { className: 'level-high', label: '좋음' };
+            if (score >= 50) return { className: 'level-mid', label: '보통' };
+            if (score >= 30) return { className: 'level-low', label: '약함' };
+            return { className: 'level-none', label: '비수기' };
+        }
+
+        function getSpeciesScore(speciesName, month = selectedMonth) {
+            const item = fishSeasonData.find(fish => fish.name === speciesName);
+            return item ? Number(item.season[month] || 0) : 0;
+        }
+
+        function getMonthlySpecies() {
+            return fishSeasonData
+                .map(fish => ({ ...fish, score: Number(fish.season[selectedMonth] || 0) }))
+                .sort((a, b) => b.score - a.score);
+        }
+
+        function renderMonthHeader() {
+            document.getElementById('current-month-label').innerText = selectedMonth;
+            const isThisMonth = selectedMonth === today.getMonth() + 1;
+            document.getElementById('month-subtitle').innerText = isThisMonth ? '이번 달 추천 어종' : `${selectedMonth}월 추천 어종`;
+            document.getElementById('recommend-title').innerText = `🔥 ${selectedMonth}월 잘 잡히는 순서`;
+        }
+
+        function renderSpeciesCards() {
+            const strip = document.getElementById('species-strip');
+            strip.innerHTML = '';
+            getMonthlySpecies().forEach((fish, index) => {
+                const level = getScoreLevel(fish.score);
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = `species-card ${level.className} ${fish.score >= 90 ? 'hot' : ''} ${selectedSpecies === fish.name ? 'active' : ''}`;
+                card.innerHTML = `
+                    <div class="species-name">${index === 0 ? '🔥 ' : ''}${fish.name}</div>
+                    <div class="species-meta">${level.label} · 제철도 ${fish.score}%</div>
+                    <div class="score-bar"><div class="score-fill" style="width:${fish.score}%"></div></div>
+                `;
+                card.addEventListener('click', () => {
+                    selectedSpecies = selectedSpecies === fish.name ? null : fish.name;
+                    renderSpeciesCards();
+                    applyCurrentFilter();
+                });
+                strip.appendChild(card);
+            });
+        }
+
+        function logMatchesSpecies(log, species) {
+            if (!species) return true;
+            return (log.tags && log.tags.includes(species)) || (log.title && log.title.includes(species));
+        }
+
+        function applyCurrentFilter() {
+            filteredLogs = selectedSpecies ? allLogs.filter(log => logMatchesSpecies(log, selectedSpecies)) : allLogs;
+            renderMarkers();
+            renderFeedReset();
+        }
+
         async function fetchLogs() {
             try {
                 const response = await fetch(API_URL);
                 if (!response.ok) throw new Error('Network response was not ok');
                 allLogs = await response.json();
                 allLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
-                applyFilter('전체');
             } catch (error) {
                 console.error('API Fetch Error:', error);
                 allLogs = [
-                    { id: "1", date: "2026-06-03 16:20", title: "배스 42cm", place: "충주호", tags: ["배스", "텍사스리그"], lat: 36.974, lng: 128.013, photo: "https://via.placeholder.com/300x200" },
-                    { id: "2", date: "2026-06-03 05:45", title: "월척 붕어", place: "탄금호", tags: ["붕어"], lat: 37.012, lng: 127.899, photo: "" }
+                    { id: '1', date: '2026-06-03 16:20', title: '배스 42cm', place: '충주호', tags: ['배스', '텍사스리그'], lat: 36.974, lng: 128.013, photo: 'https://via.placeholder.com/300x200' },
+                    { id: '2', date: '2026-06-03 05:45', title: '월척 붕어', place: '탄금호', tags: ['붕어'], lat: 37.012, lng: 127.899, photo: '' },
+                    { id: '3', date: '2026-06-05 19:10', title: '쏘가리 31cm', place: '남한강', tags: ['쏘가리', '미노우'], lat: 37.087, lng: 127.799, photo: '' },
+                    { id: '4', date: '2026-06-07 21:05', title: '메기 58cm', place: '금강', tags: ['메기'], lat: 36.452, lng: 127.121, photo: '' }
                 ];
-                applyFilter('전체');
+            }
+            renderMonthHeader();
+            renderSpeciesCards();
+            applyCurrentFilter();
+        }
+
+        function renderMarkers() {
+            markerGroup.clearLayers();
+            filteredLogs.forEach(log => {
+                if (log.lat && log.lng) {
+                    const mainSpecies = (log.tags && log.tags[0]) || extractSpeciesFromTitle(log.title) || '';
+                    const score = getSpeciesScore(mainSpecies);
+                    const photoHtml = log.photo
+                        ? `<img src="${log.photo}" style="width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;" alt="조과 사진">`
+                        : '';
+                    const popupContent = `
+                        <div style="min-width:180px;text-align:center;cursor:pointer;" onclick="openModal('${log.id}')">
+                            ${photoHtml}
+                            <b style="display:block;font-size:14px;margin-bottom:4px;">${escapeHtml(log.title || '')}</b>
+                            <span style="font-size:12px;color:#666;">📍 ${escapeHtml(log.place || '')}</span><br>
+                            <span style="font-size:12px;color:#ef4444;font-weight:800;">${selectedMonth}월 제철도 ${score}%</span>
+                        </div>
+                    `;
+                    const marker = L.marker([log.lat, log.lng]).bindPopup(popupContent, { minWidth: 180, maxWidth: 250 }).addTo(markerGroup);
+                    log._marker = marker;
+                }
+            });
+
+            if (markerGroup.getLayers().length > 0) {
+                map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 14 });
             }
         }
 
-        // --- 모달 제어 함수 추가 ---
+        function renderFeedReset() {
+            document.getElementById('feed-list').innerHTML = '';
+            currentRenderIndex = 0;
+            updateFeedSummary();
+            renderNextBatch();
+        }
+
+        function updateFeedSummary() {
+            const summary = document.getElementById('feed-summary');
+            const label = selectedSpecies ? `<strong>${selectedSpecies}</strong>` : `<strong>전체 어종</strong>`;
+            const topFish = getMonthlySpecies()[0];
+            summary.innerHTML = `현재 선택: ${label}<br>${selectedMonth}월 최고 추천은 <strong>${topFish.name}</strong>입니다. 개인 로그 ${filteredLogs.length}건을 지도와 피드에 표시합니다.`;
+        }
+
+        function renderNextBatch() {
+            const feedList = document.getElementById('feed-list');
+            const end = Math.min(currentRenderIndex + ITEMS_PER_PAGE, filteredLogs.length);
+
+            if (filteredLogs.length === 0 && currentRenderIndex === 0) {
+                feedList.innerHTML = '<div class="empty-state">표시할 개인 조과 로그가 없습니다.</div>';
+                return;
+            }
+
+            for (let i = currentRenderIndex; i < end; i++) {
+                const log = filteredLogs[i];
+                const mainSpecies = (log.tags && log.tags[0]) || extractSpeciesFromTitle(log.title) || '';
+                const score = getSpeciesScore(mainSpecies);
+                const level = getScoreLevel(score);
+                const card = document.createElement('div');
+                card.className = 'feed-card';
+                const imgTag = log.photo
+                    ? `<img src="${log.photo}" class="feed-img" alt="조과 사진">`
+                    : `<div class="feed-img" style="display:flex;align-items:center;justify-content:center;font-size:26px;">🐟</div>`;
+                const tags = (log.tags && log.tags.length > 0) ? `| 🏷️ ${log.tags.join(', ')}` : '';
+                card.innerHTML = `
+                    ${imgTag}
+                    <div class="feed-info">
+                        <div class="feed-title">${escapeHtml(log.title || '')}</div>
+                        <div class="feed-desc">📍 ${escapeHtml(log.place || '')} ${tags}</div>
+                        <div class="feed-desc">${selectedMonth}월 제철도 ${score}% · ${level.label}</div>
+                        <div class="feed-date">${escapeHtml(log.date || '')}</div>
+                    </div>
+                `;
+                card.addEventListener('click', () => focusLogOnMap(log));
+                feedList.appendChild(card);
+            }
+            currentRenderIndex = end;
+        }
+
+        function focusLogOnMap(log) {
+            if (!(log.lat && log.lng)) {
+                openModal(log.id);
+                return;
+            }
+            if (window.innerWidth <= 768) {
+                document.querySelector('.content-wrapper').scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            const zoomLevel = 15;
+            const targetPoint = map.project([log.lat, log.lng], zoomLevel);
+            targetPoint.y -= 150;
+            const offsetLatLng = map.unproject(targetPoint, zoomLevel);
+            map.flyTo(offsetLatLng, zoomLevel, { duration: 0.5 });
+            map.once('moveend', () => {
+                if (log._marker) log._marker.openPopup();
+            });
+        }
+
+        function extractSpeciesFromTitle(title = '') {
+            const found = fishSeasonData.find(fish => title.includes(fish.name));
+            return found ? found.name : '';
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         window.openModal = function(logId) {
-            const log = allLogs.find(l => l.id === logId);
-            if(!log) return;
-            
+            const log = allLogs.find(l => String(l.id) === String(logId));
+            if (!log) return;
             const modalImg = document.getElementById('modal-img');
             modalImg.src = log.photo || '';
-            modalImg.style.display = log.photo ? 'block' : 'none'; // 사진 없으면 영역 숨김
-            
-            document.getElementById('modal-title').innerText = log.title;
-            // 태그 배열 유무 체크 방어 코드 추가
-            const tags = (log.tags && log.tags.length > 0) ? `<br>🏷️ ${log.tags.join(', ')}` : '';
-            document.getElementById('modal-desc').innerHTML = `📍 ${log.place}<br>📅 ${log.date}${tags}`;
-            
+            modalImg.style.display = log.photo ? 'block' : 'none';
+            const mainSpecies = (log.tags && log.tags[0]) || extractSpeciesFromTitle(log.title) || '';
+            const score = getSpeciesScore(mainSpecies);
+            const tags = (log.tags && log.tags.length > 0) ? `<br>🏷️ ${log.tags.map(escapeHtml).join(', ')}` : '';
+            document.getElementById('modal-title').innerText = log.title || '';
+            document.getElementById('modal-desc').innerHTML = `📍 ${escapeHtml(log.place || '')}<br>📅 ${escapeHtml(log.date || '')}<br>🔥 ${selectedMonth}월 제철도 ${score}%${tags}`;
             document.getElementById('log-modal').classList.add('show');
         };
 
@@ -153,115 +451,38 @@
             document.getElementById('log-modal').classList.remove('show');
         };
 
-        function applyFilter(species) {
-            filteredLogs = species === '전체' 
-                ? allLogs 
-                : allLogs.filter(log => (log.tags && log.tags.includes(species)) || (log.title && log.title.includes(species)));
+        document.getElementById('prev-month').addEventListener('click', () => {
+            selectedMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+            renderMonthHeader();
+            renderSpeciesCards();
+            applyCurrentFilter();
+        });
 
-            markerGroup.clearLayers();
-            filteredLogs.forEach(log => {
-                if(log.lat && log.lng) {
-                    const photoHtml = log.photo 
-                        ? `<img src="${log.photo}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;" alt="조과 사진">` 
-                        : '';
+        document.getElementById('next-month').addEventListener('click', () => {
+            selectedMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
+            renderMonthHeader();
+            renderSpeciesCards();
+            applyCurrentFilter();
+        });
 
-                    // --- 팝업에 onclick 이벤트(openModal) 추가 ---
-                    const popupContent = `
-                        <div style="min-width: 180px; text-align: center; cursor: pointer;" onclick="openModal('${log.id}')">
-                            ${photoHtml}
-                            <b style="display: block; font-size: 14px; margin-bottom: 4px;">${log.title}</b>
-                            <span style="font-size: 12px; color: #666;">📍 ${log.place}</span>
-                        </div>
-                    `;
-
-                    const marker = L.marker([log.lat, log.lng])
-                        .bindPopup(popupContent, { 
-                            minWidth: 180, maxWidth: 250 
-                        })
-                        .addTo(markerGroup);
-                    log._marker = marker; 
-                }
-            });
-
-            if (filteredLogs.length > 0) {
-                map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 14 });
-            }
-
-            document.getElementById('feed-list').innerHTML = '';
-            currentRenderIndex = 0;
-            renderNextBatch();
-        }
-
-        function renderNextBatch() {
-            const feedList = document.getElementById('feed-list');
-            const end = Math.min(currentRenderIndex + ITEMS_PER_PAGE, filteredLogs.length);
-            
-            for (let i = currentRenderIndex; i < end; i++) {
-                const log = filteredLogs[i];
-                const card = document.createElement('div');
-                card.className = 'feed-card';
-                
-                const imgTag = log.photo 
-                    ? `<img src="${log.photo}" class="feed-img" alt="조과 사진">` 
-                    : `<div class="feed-img" style="display:flex; align-items:center; justify-content:center; font-size:24px;">🐟</div>`;
-
-                const tags = (log.tags && log.tags.length > 0) ? `| 🏷️ ${log.tags.join(', ')}` : '';
-                card.innerHTML = `
-                    ${imgTag}
-                    <div class="feed-info">
-                        <div class="feed-title">${log.title}</div>
-                        <div class="feed-desc">📍 ${log.place} ${tags}</div>
-                        <div class="feed-date">${log.date}</div>
-                    </div>
-                `;
-
-                card.addEventListener('click', () => {
-                    if (log.lat && log.lng) {
-                        if(window.innerWidth <= 768) {
-                            document.querySelector('.content-wrapper').scrollTo({top: 0, behavior: 'smooth'});
-                        }
-                        
-                        const zoomLevel = 15;
-                        
-                        // --- 핀 중앙이 아닌 사진 팝업을 중앙에 오게 하는 오프셋 계산 ---
-                        const targetPoint = map.project([log.lat, log.lng], zoomLevel);
-                        // 150px 만큼 지도를 위로 올려서 핀이 아래로 내려가게 함 (팝업 높이 고려)
-                        targetPoint.y -= 150; 
-                        const offsetLatLng = map.unproject(targetPoint, zoomLevel);
-
-                        map.flyTo(offsetLatLng, zoomLevel, { duration: 0.5 });
-                        
-                        // 지도 이동이 완전히 끝난 후 팝업 열기 (화면 덜컹거림 방지)
-                        map.once('moveend', () => {
-                            if(log._marker) log._marker.openPopup();
-                        });
-                    }
-                });
-
-                feedList.appendChild(card);
-            }
-            currentRenderIndex = end;
-        }
+        document.getElementById('show-all-btn').addEventListener('click', () => {
+            selectedSpecies = null;
+            renderSpeciesCards();
+            applyCurrentFilter();
+        });
 
         const sentinel = document.getElementById('scroll-sentinel');
         const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && currentRenderIndex < filteredLogs.length) {
-                renderNextBatch();
-            }
+            if (entries[0].isIntersecting && currentRenderIndex < filteredLogs.length) renderNextBatch();
         }, {
             root: document.getElementById('feed-scroll-area'),
-            rootMargin: '100px', 
+            rootMargin: '100px',
             threshold: 0
         });
-        
         observer.observe(sentinel);
 
-        document.getElementById('filter-container').addEventListener('click', (e) => {
-            if (e.target.classList.contains('filter-btn')) {
-                document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-                e.target.classList.add('active');
-                applyFilter(e.target.getAttribute('data-species'));
-            }
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeModal();
         });
 
         fetchLogs();
